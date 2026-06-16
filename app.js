@@ -1,20 +1,36 @@
 let db;
-let scannedBarcode = null;
 let products = [];
+let scannedBarcode = null;
 
 /* =========================
-   IndexedDB INIT
+   NORMALISATION BARCODE
+========================= */
+function normalizeBarcode(code) {
+  return String(code || "").trim();
+}
+
+/* =========================
+   INIT IndexedDB
 ========================= */
 const request = indexedDB.open("StockDB", 1);
 
-request.onupgradeneeded = function(e) {
+request.onupgradeneeded = function (e) {
   db = e.target.result;
-  db.createObjectStore("products", { keyPath: "barcode" });
+
+  const store = db.createObjectStore("products", {
+    keyPath: "barcode"
+  });
+
+  store.createIndex("barcode", "barcode", { unique: true });
 };
 
-request.onsuccess = function(e) {
+request.onsuccess = function (e) {
   db = e.target.result;
   loadProducts();
+};
+
+request.onerror = function () {
+  console.error("Erreur IndexedDB");
 };
 
 /* =========================
@@ -27,13 +43,13 @@ function loadProducts() {
   const req = store.getAll();
 
   req.onsuccess = () => {
-    products = req.result;
+    products = req.result || [];
     render(products);
   };
 }
 
 /* =========================
-   RENDER
+   RENDER LIST
 ========================= */
 function render(list) {
   const container = document.getElementById("productList");
@@ -44,7 +60,7 @@ function render(list) {
       <div class="product">
         <b>${p.name}</b><br>
         Code: ${p.barcode}<br>
-        Prix: ${p.sell} DA<br>
+        Prix vente: ${p.sell} DA<br>
         Stock: ${p.qty}
       </div>
     `;
@@ -52,28 +68,43 @@ function render(list) {
 }
 
 /* =========================
+   SAVE PRODUCT (PROMISE)
+========================= */
+function saveProduct(product) {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction("products", "readwrite");
+    const store = tx.objectStore("products");
+
+    const req = store.put(product);
+
+    req.onsuccess = () => resolve();
+    req.onerror = () => reject();
+  });
+}
+
+/* =========================
    IMPORT EXCEL
 ========================= */
-document.getElementById("excelFile").addEventListener("change", function(e) {
+document.getElementById("excelFile").addEventListener("change", function (e) {
   const file = e.target.files[0];
   const reader = new FileReader();
 
-  reader.onload = function(evt) {
+  reader.onload = async function (evt) {
     const data = new Uint8Array(evt.target.result);
     const workbook = XLSX.read(data, { type: "array" });
 
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
     const json = XLSX.utils.sheet_to_json(sheet);
 
-    json.forEach(item => {
-      saveProduct({
-        name: item.Nom,
-        barcode: item["Code-barres"],
-        buy: item["Coût"],
-        sell: item["Prix de vente"],
-        qty: item["Quantité disponible"]
+    for (const item of json) {
+      await saveProduct({
+        name: item.Nom || "",
+        barcode: normalizeBarcode(item["Code-barres"]),
+        buy: Number(item["Coût"]) || 0,
+        sell: Number(item["Prix de vente"]) || 0,
+        qty: Number(item["Quantité disponible"]) || 0
       });
-    });
+    }
 
     loadProducts();
   };
@@ -82,12 +113,17 @@ document.getElementById("excelFile").addEventListener("change", function(e) {
 });
 
 /* =========================
-   SAVE PRODUCT
+   SEARCH DIRECT IndexedDB
 ========================= */
-function saveProduct(p) {
-  const tx = db.transaction("products", "readwrite");
+function findProduct(barcode, callback) {
+  const tx = db.transaction("products", "readonly");
   const store = tx.objectStore("products");
-  store.put(p);
+
+  const req = store.get(barcode);
+
+  req.onsuccess = () => {
+    callback(req.result);
+  };
 }
 
 /* =========================
@@ -100,35 +136,46 @@ function startScanner() {
     inputStream: {
       name: "Live",
       type: "LiveStream",
-      target: document.querySelector("#scanner")
+      target: document.querySelector("#scanner"),
+      constraints: {
+        facingMode: "environment"
+      }
     },
     decoder: {
-      readers: ["ean_reader", "code_128_reader"]
+      readers: ["ean_reader", "code_128_reader", "ean_8_reader"]
     }
-  }, function(err) {
-    if (err) return console.log(err);
+  }, function (err) {
+    if (err) {
+      console.error(err);
+      return;
+    }
     Quagga.start();
   });
 
+  Quagga.offDetected(); // éviter doublons
   Quagga.onDetected(onScan);
 }
 
+/* =========================
+   ON SCAN RESULT
+========================= */
 function onScan(result) {
-  scannedBarcode = result.codeResult.code;
+  scannedBarcode = normalizeBarcode(result.codeResult.code);
+
   Quagga.stop();
   document.getElementById("scanner").classList.add("hidden");
 
-  const found = products.find(p => p.barcode === scannedBarcode);
-
-  if (found) {
-    alert("Produit trouvé: " + found.name);
-  } else {
-    openForm(scannedBarcode);
-  }
+  findProduct(scannedBarcode, (found) => {
+    if (found) {
+      alert("Produit trouvé : " + found.name);
+    } else {
+      openForm(scannedBarcode);
+    }
+  });
 }
 
 /* =========================
-   FORM PRODUIT
+   FORM (OPTION C)
 ========================= */
 function openForm(barcode) {
   document.getElementById("productForm").classList.remove("hidden");
@@ -140,18 +187,19 @@ function closeForm() {
 }
 
 /* =========================
-   SAVE NEW PRODUCT (Option C)
+   SAVE NEW PRODUCT
 ========================= */
-function saveNewProduct() {
-  const p = {
+async function saveNewProduct() {
+  const product = {
     name: document.getElementById("pName").value,
-    barcode: document.getElementById("pBarcode").value,
-    buy: document.getElementById("pBuy").value,
-    sell: document.getElementById("pSell").value,
-    qty: document.getElementById("pQty").value
+    barcode: normalizeBarcode(document.getElementById("pBarcode").value),
+    buy: Number(document.getElementById("pBuy").value) || 0,
+    sell: Number(document.getElementById("pSell").value) || 0,
+    qty: Number(document.getElementById("pQty").value) || 0
   };
 
-  saveProduct(p);
+  await saveProduct(product);
+
   closeForm();
   loadProducts();
 }
