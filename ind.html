@@ -1,113 +1,423 @@
-from pathlib import Path
-
-html = r"""<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
 <title>Gestion Stock Excel</title>
+
 <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jsbarcode/dist/JsBarcode.all.min.js"></script>
+
 <style>
-body{font-family:Arial;padding:20px}
-input,button{padding:8px;margin:5px}
-table{border-collapse:collapse;width:100%;margin-top:10px}
-td,th{border:1px solid #ccc;padding:6px}
-.card{border:1px solid #ddd;padding:10px;margin:10px 0}
+
+body{
+    font-family:Arial;
+    margin:20px;
+    background:#f5f5f5;
+}
+
+.card{
+    background:white;
+    padding:15px;
+    border-radius:10px;
+    margin-bottom:15px;
+    box-shadow:0 2px 5px rgba(0,0,0,.15);
+}
+
+input{
+    width:100%;
+    padding:10px;
+    margin-top:5px;
+    margin-bottom:10px;
+}
+
+button{
+    padding:10px 20px;
+    cursor:pointer;
+}
+
+h2{
+    margin-top:0;
+}
+
+.total{
+    font-size:20px;
+    font-weight:bold;
+}
+
 </style>
 </head>
+
 <body>
-<h2>Gestion des Produits Excel</h2>
-
-<input type="file" id="fileInput" accept=".xlsx,.xls">
 
 <div class="card">
-<h3>Recherche produit</h3>
-<input id="search" placeholder="Nom ou code barre">
-<button onclick="chercher()">Rechercher</button>
-</div>
 
-<div id="resultat"></div>
+<h2>Gestion Stock Excel</h2>
+
+<input
+type="file"
+id="fileInput"
+accept=".xlsx,.xls">
+
+</div>
 
 <div class="card">
-<h3>Totaux du stock</h3>
-<p>Total achat: <span id="totalAchat">0</span></p>
-<p>Total vente: <span id="totalVente">0</span></p>
+
+<h3>Recherche Produit</h3>
+
+<input
+id="search"
+placeholder="Nom ou Code Barre">
+
+<p>
+Scanner directement avec votre lecteur code-barres USB
+</p>
+
 </div>
 
-<button onclick="telecharger()">Télécharger Excel modifié</button>
+<div id="productArea"></div>
+
+<div class="card">
+
+<h3>Valeur du Stock</h3>
+
+<div class="total">
+Total Achat :
+<span id="totalAchat">0</span> DA
+</div>
+
+<br>
+
+<div class="total">
+Total Vente :
+<span id="totalVente">0</span> DA
+</div>
+
+<br>
+
+<div class="total">
+Bénéfice Potentiel :
+<span id="benefice">0</span> DA
+</div>
+
+</div>
+
+<div class="card">
+
+<button onclick="telechargerExcel()">
+Télécharger Excel Modifié
+</button>
+
+</div>
 
 <script>
-let workbook,data,sheetName;
 
-document.getElementById('fileInput').addEventListener('change',e=>{
- const file=e.target.files[0];
- const reader=new FileReader();
- reader.onload=(ev)=>{
-   workbook=XLSX.read(ev.target.result,{type:'binary'});
-   sheetName=workbook.SheetNames[0];
-   data=XLSX.utils.sheet_to_json(workbook.Sheets[sheetName]);
-   calculerTotaux();
-   alert("Fichier chargé");
- };
- reader.readAsBinaryString(file);
+let workbook;
+let sheetName;
+let data = [];
+
+////////////////////////////////////////////////////
+//// CHARGEMENT EXCEL
+////////////////////////////////////////////////////
+
+document
+.getElementById("fileInput")
+.addEventListener("change", chargerExcel);
+
+function chargerExcel(e){
+
+const file = e.target.files[0];
+
+const reader = new FileReader();
+
+reader.onload = function(event){
+
+workbook = XLSX.read(
+event.target.result,
+{type:'binary'}
+);
+
+sheetName = workbook.SheetNames[0];
+
+data = XLSX.utils.sheet_to_json(
+workbook.Sheets[sheetName]
+);
+
+calculerTotaux();
+
+alert("Fichier chargé avec succès");
+
+};
+
+reader.readAsBinaryString(file);
+
+}
+
+////////////////////////////////////////////////////
+//// RECHERCHE
+////////////////////////////////////////////////////
+
+document
+.getElementById("search")
+.addEventListener("keyup", function(e){
+
+if(e.key==="Enter"){
+chercherProduit();
+}
+
 });
 
-function chercher(){
- const q=document.getElementById('search').value.toLowerCase().trim();
- const p=data.find(r=>
-   String(r["Nom"]||"").toLowerCase().includes(q) ||
-   String(r["Code-barres"]||"").toLowerCase()===q
- );
+function chercherProduit(){
 
- const div=document.getElementById('resultat');
+const valeur =
+document
+.getElementById("search")
+.value
+.toLowerCase()
+.trim();
 
- if(!p){div.innerHTML="<b>Produit introuvable</b>";return;}
+const produit = data.find(p =>
 
- div.innerHTML=`
- <div class="card">
- <h3>${p["Nom"]}</h3>
- <p>Code Barre : ${p["Code-barres"]}</p>
+String(p["Nom"]||"")
+.toLowerCase()
+.includes(valeur)
 
- Quantité :
- <input id="qte" type="number" value="${p["Quantité disponible"]||0}"><br>
+||
 
- Prix Achat :
- <input id="cout" type="number" step="0.01" value="${p["Coût"]||0}"><br>
+String(p["Code-barres"]||"")
+.toLowerCase()
+=== valeur
 
- Prix Vente :
- <input id="vente" type="number" step="0.01" value="${p["Prix de vente"]||0}"><br>
+);
 
- <button onclick="sauver('${String(p["Code-barres"]).replace(/'/g,'')}')">Enregistrer</button>
- </div>`;
+afficherProduit(produit);
+
 }
 
-function sauver(code){
- const p=data.find(r=>String(r["Code-barres"])===String(code));
- p["Quantité disponible"]=Number(document.getElementById('qte').value);
- p["Coût"]=Number(document.getElementById('cout').value);
- p["Prix de vente"]=Number(document.getElementById('vente').value);
- calculerTotaux();
- alert("Modification enregistrée en mémoire");
+////////////////////////////////////////////////////
+//// AFFICHAGE
+////////////////////////////////////////////////////
+
+function afficherProduit(produit){
+
+const zone =
+document.getElementById("productArea");
+
+if(!produit){
+
+zone.innerHTML=
+"<div class='card'><b>Produit introuvable</b></div>";
+
+return;
+
 }
+
+zone.innerHTML=`
+
+<div class="card">
+
+<h3>Produit</h3>
+
+Nom
+
+<input
+id="nom"
+value="${produit["Nom"] || ""}">
+
+Code Barre
+
+<input
+id="barcode"
+value="${produit["Code-barres"] || ""}">
+
+<svg id="barcodeSvg"></svg>
+
+Quantité
+
+<input
+id="quantite"
+type="number"
+value="${produit["Quantité disponible"] || 0}">
+
+Prix Achat
+
+<input
+id="cout"
+type="number"
+step="0.01"
+value="${produit["Coût"] || 0}">
+
+Prix Vente
+
+<input
+id="prix"
+type="number"
+step="0.01"
+value="${produit["Prix de vente"] || 0}">
+
+<button onclick="enregistrerProduit()">
+Enregistrer Modification
+</button>
+
+</div>
+
+`;
+
+afficherBarcode();
+
+}
+
+////////////////////////////////////////////////////
+//// CODE BARRE
+////////////////////////////////////////////////////
+
+function afficherBarcode(){
+
+const code =
+document.getElementById("barcode").value;
+
+if(code){
+
+JsBarcode(
+"#barcodeSvg",
+code,
+{
+format:"CODE128",
+displayValue:true
+}
+);
+
+}
+
+}
+
+////////////////////////////////////////////////////
+//// SAUVEGARDE
+////////////////////////////////////////////////////
+
+function enregistrerProduit(){
+
+const ancienCode =
+document
+.getElementById("search")
+.value
+.trim();
+
+const produit = data.find(p =>
+
+String(p["Code-barres"]) === ancienCode
+
+||
+
+String(p["Nom"])
+.toLowerCase()
+=== ancienCode.toLowerCase()
+
+);
+
+if(!produit){
+
+alert("Produit introuvable");
+
+return;
+
+}
+
+produit["Nom"] =
+document.getElementById("nom").value;
+
+produit["Code-barres"] =
+document.getElementById("barcode").value;
+
+produit["Quantité disponible"] =
+Number(
+document.getElementById("quantite").value
+);
+
+produit["Coût"] =
+Number(
+document.getElementById("cout").value
+);
+
+produit["Prix de vente"] =
+Number(
+document.getElementById("prix").value
+);
+
+calculerTotaux();
+
+afficherBarcode();
+
+alert("Modification enregistrée");
+
+}
+
+////////////////////////////////////////////////////
+//// CALCULS
+////////////////////////////////////////////////////
 
 function calculerTotaux(){
- let achat=0, vente=0;
- data.forEach(r=>{
-   achat += (Number(r["Coût"])||0)*(Number(r["Quantité disponible"])||0);
-   vente += (Number(r["Prix de vente"])||0)*(Number(r["Quantité disponible"])||0);
- });
- document.getElementById('totalAchat').innerText=achat.toFixed(2);
- document.getElementById('totalVente').innerText=vente.toFixed(2);
+
+let totalAchat = 0;
+let totalVente = 0;
+
+data.forEach(p=>{
+
+const qte =
+Number(
+p["Quantité disponible"]
+) || 0;
+
+const achat =
+Number(
+p["Coût"]
+) || 0;
+
+const vente =
+Number(
+p["Prix de vente"]
+) || 0;
+
+totalAchat += qte * achat;
+totalVente += qte * vente;
+
+});
+
+document.getElementById("totalAchat")
+.innerText =
+totalAchat.toFixed(2);
+
+document.getElementById("totalVente")
+.innerText =
+totalVente.toFixed(2);
+
+document.getElementById("benefice")
+.innerText =
+(totalVente-totalAchat)
+.toFixed(2);
+
 }
 
-function telecharger(){
- const ws=XLSX.utils.json_to_sheet(data);
- workbook.Sheets[sheetName]=ws;
- XLSX.writeFile(workbook,'Stock_Modifie.xlsx');
+////////////////////////////////////////////////////
+//// EXPORT EXCEL
+////////////////////////////////////////////////////
+
+function telechargerExcel(){
+
+const ws =
+XLSX.utils.json_to_sheet(data);
+
+workbook.Sheets[sheetName] = ws;
+
+XLSX.writeFile(
+workbook,
+"Stock_Modifie.xlsx"
+);
+
 }
+
 </script>
+
 </body>
-</html>"""
-p=Path("/mnt/data/Gestion_Stock_Excel.html")
-p.write_text(html, encoding="utf-8")
-print(str(p))
+</html>
