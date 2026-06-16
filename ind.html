@@ -1,17 +1,18 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Stock Scanner</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-  <link rel="stylesheet" href="style.css">
+<title>Stock Pro</title>
 
-  <!-- Quagga (scanner) -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
+<link rel="stylesheet" href="style.css">
 
-  <!-- Excel -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/18.5.1/xlsx.full.min.js"></script>
+
+<!-- Scanner moderne (meilleur que Quagga) -->
+<script src="https://unpkg.com/@ericblade/quagga2/dist/quagga.min.js"></script>
+
 </head>
 
 <body>
@@ -20,42 +21,40 @@
   <h2>Gestion Stock</h2>
 </header>
 
-<!-- IMPORT + SCAN -->
-<div class="controls">
-  <input type="file" id="excelFile">
+<div class="top">
 
-  <button onclick="startScanner()">📷 Scanner</button>
-  <button onclick="exportExcel()">📤 Export</button>
+  <input type="file" id="excel">
+
+  <button onclick="startScan()">📷 Scanner</button>
+
+  <input id="searchInput" placeholder="Nom ou code-barres">
+  <button onclick="search()">🔎 Rechercher</button>
+
 </div>
 
-<!-- RECHERCHE -->
-<div class="searchBox">
-  <input type="text" id="searchInput" placeholder="Code-barres ou Nom produit">
-  <button onclick="searchProduct()">🔎 Rechercher</button>
-</div>
-
-<!-- SCANNER -->
 <div id="scanner" class="scanner hidden"></div>
 
-<!-- LISTE -->
-<div id="productList"></div>
+<div id="result"></div>
 
-<!-- FORM AJOUT PRODUIT -->
-<div id="productForm" class="modal hidden">
-  <div class="modalBox">
-    <h3>Produit introuvable</h3>
+<!-- EDIT MODAL -->
+<div id="editModal" class="modal hidden">
+  <div class="box">
 
-    <input id="pName" placeholder="Nom produit">
-    <input id="pBarcode" placeholder="Code-barres" readonly>
-    <input id="pBuy" type="number" placeholder="Prix achat">
-    <input id="pSell" type="number" placeholder="Prix vente">
-    <input id="pQty" type="number" placeholder="Quantité">
+    <h3>Modifier produit</h3>
 
-    <button onclick="saveNewProduct()">💾 Enregistrer</button>
-    <button onclick="closeForm()">❌ Annuler</button>
+    <input id="eName">
+    <input id="eBarcode" disabled>
+    <input id="eBuy" type="number">
+    <input id="eSell" type="number">
+    <input id="eQty" type="number">
+
+    <button onclick="saveEdit()">💾 Sauvegarder</button>
+    <button onclick="closeEdit()">❌ Fermer</button>
+
   </div>
 </div>
 
 <script src="app.js"></script>
+
 </body>
 </html>
