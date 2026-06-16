@@ -1,46 +1,62 @@
 let db;
-let currentProduct = null;
 let products = [];
 
 /* =========================
-   INIT DB
+   NORMALISATION
 ========================= */
-const req = indexedDB.open("StockDB", 1);
+function norm(v){
+  return String(v || "").trim().toLowerCase();
+}
 
-req.onupgradeneeded = e=>{
+/* =========================
+   INIT IndexedDB
+========================= */
+const request = indexedDB.open("StockDB", 1);
+
+request.onupgradeneeded = function(e){
   db = e.target.result;
-  db.createObjectStore("products",{keyPath:"barcode"});
+
+  const store = db.createObjectStore("products", {
+    keyPath: "barcode"
+  });
+
+  store.createIndex("name", "name", { unique:false });
 };
 
-req.onsuccess = e=>{
+request.onsuccess = function(e){
   db = e.target.result;
   loadProducts();
 };
 
-/* =========================
-   NORMALIZE
-========================= */
-function norm(v){
-  return String(v||"").trim().toLowerCase();
-}
+request.onerror = function(){
+  console.error("Erreur IndexedDB");
+};
 
 /* =========================
-   LOAD
+   LOAD PRODUCTS
 ========================= */
 function loadProducts(){
   const tx = db.transaction("products","readonly");
   const store = tx.objectStore("products");
 
-  const r = store.getAll();
+  const req = store.getAll();
 
-  r.onsuccess=()=>{
-    products = r.result || [];
+  req.onsuccess = ()=>{
+    products = req.result || [];
     updateDashboard();
   };
 }
 
 /* =========================
-   DASHBOARD CALC
+   SAVE PRODUCT
+========================= */
+function save(p){
+  const tx = db.transaction("products","readwrite");
+  tx.objectStore("products").put(p);
+}
+
+/* =========================
+   DASHBOARD
 ========================= */
 function updateDashboard(){
 
@@ -58,52 +74,56 @@ function updateDashboard(){
     totalSell += sell * qty;
   });
 
-  document.getElementById("totalProducts").innerText = products.length;
-  document.getElementById("totalQty").innerText = totalQty;
-  document.getElementById("totalBuy").innerText = totalBuy.toFixed(2)+" DA";
-  document.getElementById("totalSell").innerText = totalSell.toFixed(2)+" DA";
+  const set = (id,val)=>{
+    const el = document.getElementById(id);
+    if(el) el.innerText = val;
+  };
+
+  set("totalProducts", products.length);
+  set("totalQty", totalQty);
+  set("totalBuy", totalBuy.toFixed(2) + " DA");
+  set("totalSell", totalSell.toFixed(2) + " DA");
 }
 
 /* =========================
-   SAVE
-========================= */
-function save(p){
-  const tx = db.transaction("products","readwrite");
-  tx.objectStore("products").put(p);
-}
-
-/* =========================
-   SEARCH
+   SEARCH (IMPORTANT LOGIC)
 ========================= */
 function search(){
+
   const val = norm(document.getElementById("searchInput").value);
+
+  if(!val){
+    alert("Champ vide");
+    return;
+  }
 
   const tx = db.transaction("products","readonly");
   const store = tx.objectStore("products");
 
-  const r = store.getAll();
+  const req = store.getAll();
 
-  r.onsuccess=()=>{
-    const found = r.result.find(p =>
-      norm(p.barcode)===val ||
+  req.onsuccess = ()=>{
+
+    const found = req.result.find(p =>
+      norm(p.barcode) === val ||
       norm(p.name).includes(val)
     );
 
     if(found){
       openEdit(found);
     }else{
-      alert("Produit introuvable");
+      openCreate(val); // 👉 création automatique
     }
   };
 }
 
 /* =========================
-   EDIT
+   EDIT PRODUCT
 ========================= */
 function openEdit(p){
   currentProduct = p;
 
-  document.getElementById("editModal").classList.remove("hidden");
+  editModal.classList.remove("hidden");
 
   eName.value = p.name;
   eBarcode.value = p.barcode;
@@ -113,19 +133,17 @@ function openEdit(p){
 }
 
 function closeEdit(){
-  document.getElementById("editModal").classList.add("hidden");
+  editModal.classList.add("hidden");
 }
 
-/* =========================
-   SAVE EDIT
-========================= */
 function saveEdit(){
+
   const p = {
-    name:eName.value,
-    barcode:eBarcode.value,
-    buy:Number(eBuy.value),
-    sell:Number(eSell.value),
-    qty:Number(eQty.value)
+    name: eName.value,
+    barcode: eBarcode.value,
+    buy: Number(eBuy.value),
+    sell: Number(eSell.value),
+    qty: Number(eQty.value)
   };
 
   save(p);
@@ -134,10 +152,44 @@ function saveEdit(){
 }
 
 /* =========================
-   SCANNER
+   CREATE PRODUCT
+========================= */
+function openCreate(barcode){
+  createModal.classList.remove("hidden");
+
+  cBarcode.value = barcode;
+  cName.value = "";
+  cBuy.value = "";
+  cSell.value = "";
+  cQty.value = "";
+}
+
+function closeCreate(){
+  createModal.classList.add("hidden");
+}
+
+function saveNew(){
+
+  const p = {
+    name: cName.value,
+    barcode: cBarcode.value,
+    buy: Number(cBuy.value) || 0,
+    sell: Number(cSell.value) || 0,
+    qty: Number(cQty.value) || 0
+  };
+
+  save(p);
+
+  closeCreate();
+  loadProducts();
+}
+
+/* =========================
+   SCANNER (CAMERA FIX)
 ========================= */
 function startScan(){
-  document.getElementById("scanner").classList.remove("hidden");
+
+  scanner.classList.remove("hidden");
 
   Quagga.init({
     inputStream:{
@@ -150,37 +202,52 @@ function startScan(){
       }
     },
     decoder:{
-      readers:["ean_reader","ean_8_reader","code_128_reader"]
+      readers:[
+        "ean_reader",
+        "ean_8_reader",
+        "code_128_reader"
+      ]
     },
     locate:true
   },err=>{
-    if(err) return console.log(err);
+    if(err){
+      console.log(err);
+      return;
+    }
     Quagga.start();
   });
 
   Quagga.offDetected();
 
   Quagga.onDetected(data=>{
+
     const code = norm(data.codeResult.code);
 
     Quagga.stop();
     scanner.classList.add("hidden");
 
-    const found = products.find(p=>norm(p.barcode)===code);
+    const found = products.find(p =>
+      norm(p.barcode) === code
+    );
 
-    if(found) openEdit(found);
-    else alert("Produit introuvable");
+    if(found){
+      openEdit(found);
+    }else{
+      openCreate(code); // 👉 création directe scan
+    }
   });
 }
 
 /* =========================
    IMPORT EXCEL
 ========================= */
-excel.addEventListener("change",e=>{
+excel.addEventListener("change", e=>{
+
   const file = e.target.files[0];
   const reader = new FileReader();
 
-  reader.onload=evt=>{
+  reader.onload = evt=>{
+
     const data = new Uint8Array(evt.target.result);
     const wb = XLSX.read(data,{type:"array"});
     const sheet = wb.Sheets[wb.SheetNames[0]];
@@ -206,10 +273,11 @@ excel.addEventListener("change",e=>{
    EXPORT EXCEL
 ========================= */
 function exportExcel(){
+
   const ws = XLSX.utils.json_to_sheet(products);
   const wb = XLSX.utils.book_new();
 
-  XLSX.utils.book_append_sheet(wb,ws,"Stock");
+  XLSX.utils.book_append_sheet(wb, ws, "Stock");
 
-  XLSX.writeFile(wb,"stock.xlsx");
+  XLSX.writeFile(wb, "stock.xlsx");
 }
