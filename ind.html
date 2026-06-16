@@ -1,511 +1,58 @@
 <!DOCTYPE html>
 <html lang="fr">
-
 <head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Stock Scanner</title>
 
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="style.css">
 
-<title>Gestion Stock Mobile</title>
+  <!-- QuaggaJS (scanner barcode) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
 
-<script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
-<script src="https://unpkg.com/html5-qrcode"></script>
-<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
-
-<style>
-
-*{
-margin:0;
-padding:0;
-box-sizing:border-box;
-font-family:Arial;
-}
-
-body{
-background:#f2f4f7;
-padding:15px;
-}
-
-.card{
-background:white;
-padding:15px;
-border-radius:12px;
-margin-bottom:15px;
-box-shadow:0 2px 10px rgba(0,0,0,.1);
-}
-
-h1{
-text-align:center;
-margin-bottom:15px;
-}
-
-h3{
-margin-bottom:10px;
-}
-
-input{
-width:100%;
-padding:12px;
-margin-top:5px;
-margin-bottom:10px;
-border:1px solid #ccc;
-border-radius:8px;
-font-size:16px;
-}
-
-button{
-width:100%;
-padding:12px;
-margin-top:5px;
-margin-bottom:10px;
-border:none;
-border-radius:8px;
-font-size:16px;
-cursor:pointer;
-background:#2563eb;
-color:white;
-}
-
-button:hover{
-opacity:.9;
-}
-
-.total{
-font-size:18px;
-font-weight:bold;
-margin-top:8px;
-}
-
-#reader{
-width:100%;
-}
-
-#barcodeSvg{
-width:100%;
-}
-
-.success{
-color:green;
-font-weight:bold;
-}
-
-.error{
-color:red;
-font-weight:bold;
-}
-
-</style>
-
+  <!-- SheetJS (Excel import/export) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
 
 <body>
 
-<h1>Gestion Stock Mobile</h1>
+<header>
+  <h1>Gestion Stock Mobile</h1>
+</header>
 
-<div class="card">
+<section class="controls">
 
-<h3>Fichier Excel</h3>
+  <input type="file" id="excelFile" accept=".xlsx,.xls"/>
 
-<input
-type="file"
-id="excelFile"
-accept=".xlsx,.xls">
+  <button onclick="startScanner()">📷 Scanner</button>
+  <button onclick="exportExcel()">📤 Export Excel</button>
 
+</section>
+
+<section id="scanner" class="scanner hidden"></section>
+
+<section class="search">
+  <input type="text" id="searchInput" placeholder="Rechercher produit...">
+</section>
+
+<section id="productList"></section>
+
+<!-- Formulaire produit -->
+<div id="productForm" class="modal hidden">
+  <div class="modal-content">
+    <h3>Produit introuvable</h3>
+
+    <input id="pName" placeholder="Nom produit">
+    <input id="pBarcode" placeholder="Code-barres" readonly>
+    <input id="pBuy" type="number" placeholder="Prix achat">
+    <input id="pSell" type="number" placeholder="Prix vente">
+    <input id="pQty" type="number" placeholder="Quantité">
+
+    <button onclick="saveNewProduct()">💾 Enregistrer</button>
+    <button onclick="closeForm()">❌ Annuler</button>
+  </div>
 </div>
 
-<div class="card">
-
-<h3>Recherche Produit</h3>
-
-<input
-id="searchInput"
-placeholder="Nom ou code-barres">
-
-<button onclick="chercherProduit()">
-Rechercher
-</button>
-
-<button onclick="demarrerScanner()">
-📷 Scanner Produit
-</button>
-
-<div id="reader"></div>
-
-</div>
-
-<div id="productArea"></div>
-
-<div class="card">
-
-<h3>Valeur du Stock</h3>
-
-<div class="total">
-Total Achat :
-<span id="totalAchat">0</span>
-</div>
-
-<div class="total">
-Total Vente :
-<span id="totalVente">0</span>
-</div>
-
-<div class="total">
-Bénéfice :
-<span id="benefice">0</span>
-</div>
-
-</div>
-
-<div class="card">
-
-<button onclick="exportExcel()">
-💾 Télécharger Excel Modifié
-</button>
-
-</div>
-
-<script>
-
-let workbook;
-let worksheetName;
-let products=[];
-
-////////////////////////////////////////////////
-
-document
-.getElementById("excelFile")
-.addEventListener("change",loadExcel);
-
-function loadExcel(e){
-
-const file=e.target.files[0];
-
-const reader=new FileReader();
-
-reader.onload=function(event){
-
-workbook=XLSX.read(
-event.target.result,
-{type:"binary"}
-);
-
-worksheetName=workbook.SheetNames[0];
-
-products=
-XLSX.utils.sheet_to_json(
-workbook.Sheets[worksheetName]
-);
-
-calculateTotals();
-
-alert("Excel chargé");
-
-};
-
-reader.readAsBinaryString(file);
-
-}
-
-////////////////////////////////////////////////
-
-function chercherProduit(){
-
-const search=
-document
-.getElementById("searchInput")
-.value
-.trim()
-.toLowerCase();
-
-const product=products.find(p=>{
-
-const nom=
-String(p["Nom"]||"")
-.toLowerCase();
-
-const barcode=
-String(p["Code-barres"]||"")
-.toLowerCase();
-
-return nom.includes(search)
-|| barcode===search;
-
-});
-
-displayProduct(product);
-
-}
-
-////////////////////////////////////////////////
-
-function displayProduct(product){
-
-const area=
-document.getElementById("productArea");
-
-if(!product){
-
-area.innerHTML=
-"<div class='card error'>Produit introuvable</div>";
-
-return;
-
-}
-
-area.innerHTML=`
-
-<div class="card">
-
-<h3>Produit</h3>
-
-Nom
-
-<input
-id="nom"
-value="${product["Nom"]||""}">
-
-Code-barres
-
-<input
-id="barcode"
-value="${product["Code-barres"]||""}">
-
-<svg id="barcodeSvg"></svg>
-
-Quantité
-
-<input
-id="quantity"
-type="number"
-value="${product["Quantité disponible"]||0}">
-
-Prix Achat
-
-<input
-id="cost"
-type="number"
-step="0.01"
-value="${product["Coût"]||0}">
-
-Prix Vente
-
-<input
-id="sale"
-type="number"
-step="0.01"
-value="${product["Prix de vente"]||0}">
-
-<button onclick="saveProduct()">
-Enregistrer
-</button>
-
-</div>
-
-`;
-
-generateBarcode();
-
-}
-
-////////////////////////////////////////////////
-
-function generateBarcode(){
-
-const code=
-document.getElementById("barcode").value;
-
-if(code){
-
-JsBarcode(
-"#barcodeSvg",
-code,
-{
-format:"CODE128",
-displayValue:true
-}
-);
-
-}
-
-}
-
-////////////////////////////////////////////////
-
-function saveProduct(){
-
-const search=
-document
-.getElementById("searchInput")
-.value
-.trim();
-
-const product=products.find(p=>
-
-String(p["Code-barres"])===search
-
-||
-
-String(p["Nom"])
-.toLowerCase()
-===search.toLowerCase()
-
-);
-
-if(!product){
-
-alert("Produit non trouvé");
-
-return;
-
-}
-
-product["Nom"]=
-document.getElementById("nom").value;
-
-product["Code-barres"]=
-document.getElementById("barcode").value;
-
-product["Quantité disponible"]=
-Number(
-document.getElementById("quantity").value
-);
-
-product["Coût"]=
-Number(
-document.getElementById("cost").value
-);
-
-product["Prix de vente"]=
-Number(
-document.getElementById("sale").value
-);
-
-calculateTotals();
-
-generateBarcode();
-
-alert("Modification enregistrée");
-
-}
-
-////////////////////////////////////////////////
-
-function calculateTotals(){
-
-let totalAchat=0;
-let totalVente=0;
-
-products.forEach(p=>{
-
-const q=
-Number(
-p["Quantité disponible"]
-)||0;
-
-const achat=
-Number(
-p["Coût"]
-)||0;
-
-const vente=
-Number(
-p["Prix de vente"]
-)||0;
-
-totalAchat+=q*achat;
-totalVente+=q*vente;
-
-});
-
-document.getElementById("totalAchat")
-.innerText=
-totalAchat.toFixed(2);
-
-document.getElementById("totalVente")
-.innerText=
-totalVente.toFixed(2);
-
-document.getElementById("benefice")
-.innerText=
-(totalVente-totalAchat)
-.toFixed(2);
-
-}
-
-////////////////////////////////////////////////
-
-function exportExcel(){
-
-const ws=
-XLSX.utils.json_to_sheet(products);
-
-workbook.Sheets[worksheetName]=ws;
-
-XLSX.writeFile(
-workbook,
-"Stock_Modifie.xlsx"
-);
-
-}
-
-////////////////////////////////////////////////
-
-function demarrerScanner(){
-
-const readerDiv=
-document.getElementById("reader");
-
-readerDiv.innerHTML="";
-
-const scanner=
-new Html5Qrcode("reader");
-
-scanner.start(
-
-{
-facingMode:"environment"
-},
-
-{
-fps:10,
-qrbox:250
-},
-
-(code)=>{
-
-document
-.getElementById("searchInput")
-.value=code;
-
-chercherProduit();
-
-scanner.stop();
-
-readerDiv.innerHTML="";
-
-},
-
-(error)=>{
-
-}
-
-);
-
-}
-
-////////////////////////////////////////////////
-
-document
-.getElementById("searchInput")
-.addEventListener("keyup",function(e){
-
-if(e.key==="Enter")
-chercherProduit();
-
-});
-
-</script>
-
+<script src="app.js"></script>
 </body>
-
 </html>
