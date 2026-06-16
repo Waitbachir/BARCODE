@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Inventaire Produits</title>
+
+<script src="https://unpkg.com/@zxing/library@latest"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+<style>
+body{
+    font-family:Arial,sans-serif;
+    padding:15px;
+    background:#f5f5f5;
+}
+h2{
+    text-align:center;
+}
+video{
+    width:100%;
+    max-width:500px;
+    border:2px solid #333;
+    border-radius:10px;
+}
+input,button{
+    padding:10px;
+    margin:5px;
+    width:100%;
+    box-sizing:border-box;
+}
+table{
+    width:100%;
+    border-collapse:collapse;
+    margin-top:15px;
+    background:white;
+}
+th,td{
+    border:1px solid #ccc;
+    padding:8px;
+    text-align:center;
+}
+button{
+    background:#007bff;
+    color:white;
+    border:none;
+    border-radius:5px;
+}
+button:hover{
+    background:#0056b3;
+}
+</style>
+</head>
+<body>
+
+<h2>Inventaire Produits</h2>
+
+<video id="video"></video>
+
+<input type="text" id="barcode" placeholder="Code-barres">
+<input type="number" id="quantity" placeholder="Quantité disponible">
+
+<button onclick="addProduct()">Ajouter Produit</button>
+<button onclick="exportExcel()">Télécharger Excel</button>
+
+<table id="productTable">
+    <thead>
+        <tr>
+            <th>N°</th>
+            <th>Code-barres</th>
+            <th>Quantité</th>
+        </tr>
+    </thead>
+    <tbody></tbody>
+</table>
+
+<script>
+
+let products = [];
+
+const codeReader = new ZXing.BrowserMultiFormatReader();
+
+codeReader.decodeFromVideoDevice(
+    null,
+    'video',
+    (result, err) => {
+        if(result){
+            document.getElementById('barcode').value = result.text;
+        }
+    }
+);
+
+function addProduct(){
+
+    const barcode = document.getElementById('barcode').value.trim();
+    const quantity = document.getElementById('quantity').value;
+
+    if(barcode === '' || quantity === ''){
+        alert("Veuillez scanner un produit et saisir une quantité.");
+        return;
+    }
+
+    products.push({
+        CodeBarres: barcode,
+        Quantite: quantity
+    });
+
+    updateTable();
+
+    document.getElementById('barcode').value = '';
+    document.getElementById('quantity').value = '';
+}
+
+function updateTable(){
+
+    const tbody = document.querySelector('#productTable tbody');
+    tbody.innerHTML = '';
+
+    products.forEach((p,index)=>{
+
+        let row = `
+        <tr>
+            <td>${index+1}</td>
+            <td>${p.CodeBarres}</td>
+            <td>${p.Quantite}</td>
+        </tr>
+        `;
+
+        tbody.innerHTML += row;
+    });
+}
+
+function exportExcel(){
+
+    if(products.length === 0){
+        alert("Aucune donnée à exporter.");
+        return;
+    }
+
+    const worksheet = XLSX.utils.json_to_sheet(products);
+    const workbook = XLSX.utils.book_new();
+
+    XLSX.utils.book_append_sheet(
+        workbook,
+        worksheet,
+        "Inventaire"
+    );
+
+    XLSX.writeFile(
+        workbook,
+        "Inventaire_Produits.xlsx"
+    );
+}
+
+</script>
+
+</body>
+</html>
