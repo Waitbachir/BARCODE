@@ -66,6 +66,25 @@
 <!-- RESULT -->
 <div id="result"></div>
 
+<!-- CREATE PRODUCT MODAL -->
+<div id="createModal" class="modal hidden">
+  <div class="box">
+
+    <h3>Créer nouveau produit</h3>
+
+    <input id="cName" placeholder="Nom produit">
+    <input id="cBarcode" placeholder="Code-barres" readonly>
+    <input id="cBuy" type="number" placeholder="Prix achat">
+    <input id="cSell" type="number" placeholder="Prix vente">
+    <input id="cQty" type="number" placeholder="Quantité">
+
+    <button onclick="saveNew()">💾 Créer</button>
+    <button onclick="closeCreate()">❌ Annuler</button>
+
+  </div>
+</div>
+
+  
 <!-- EDIT -->
 <div id="editModal" class="modal hidden">
   <div class="box">
