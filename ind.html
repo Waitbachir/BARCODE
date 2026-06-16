@@ -4,13 +4,11 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-<title>Stock Pro</title>
+<title>Stock Dashboard</title>
 
 <link rel="stylesheet" href="style.css">
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/18.5.1/xlsx.full.min.js"></script>
-
-<!-- Scanner moderne (meilleur que Quagga) -->
 <script src="https://unpkg.com/@ericblade/quagga2/dist/quagga.min.js"></script>
 
 </head>
@@ -18,25 +16,57 @@
 <body>
 
 <header>
-  <h2>Gestion Stock</h2>
+  <h2>📦 Gestion Stock</h2>
 </header>
 
-<div class="top">
+<!-- DASHBOARD -->
+<div class="dashboard">
+
+  <div class="box">
+    <h3 id="totalProducts">0</h3>
+    <p>Produits</p>
+  </div>
+
+  <div class="box">
+    <h3 id="totalQty">0</h3>
+    <p>Quantité totale</p>
+  </div>
+
+  <div class="box">
+    <h3 id="totalBuy">0 DA</h3>
+    <p>Valeur Achat</p>
+  </div>
+
+  <div class="box">
+    <h3 id="totalSell">0 DA</h3>
+    <p>Valeur Vente</p>
+  </div>
+
+</div>
+
+<!-- ACTIONS -->
+<div class="actions">
 
   <input type="file" id="excel">
 
   <button onclick="startScan()">📷 Scanner</button>
-
-  <input id="searchInput" placeholder="Nom ou code-barres">
-  <button onclick="search()">🔎 Rechercher</button>
+  <button onclick="exportExcel()">📥 Télécharger Excel</button>
 
 </div>
 
+<!-- SEARCH -->
+<div class="search">
+  <input id="searchInput" placeholder="Nom ou code-barres">
+  <button onclick="search()">🔎 Rechercher</button>
+</div>
+
+<!-- SCANNER -->
 <div id="scanner" class="scanner hidden"></div>
 
+<!-- RESULT -->
 <div id="result"></div>
 
-<!-- EDIT MODAL -->
+<!-- EDIT -->
 <div id="editModal" class="modal hidden">
   <div class="box">
 
