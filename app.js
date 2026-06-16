@@ -1,25 +1,67 @@
 let db;
 let currentProduct = null;
+let products = [];
 
 /* =========================
    INIT DB
 ========================= */
 const req = indexedDB.open("StockDB", 1);
 
-req.onupgradeneeded = e => {
+req.onupgradeneeded = e=>{
   db = e.target.result;
-  const store = db.createObjectStore("products", { keyPath: "barcode" });
+  db.createObjectStore("products",{keyPath:"barcode"});
 };
 
-req.onsuccess = e => {
+req.onsuccess = e=>{
   db = e.target.result;
+  loadProducts();
 };
 
 /* =========================
    NORMALIZE
 ========================= */
 function norm(v){
-  return String(v || "").trim().toLowerCase();
+  return String(v||"").trim().toLowerCase();
+}
+
+/* =========================
+   LOAD
+========================= */
+function loadProducts(){
+  const tx = db.transaction("products","readonly");
+  const store = tx.objectStore("products");
+
+  const r = store.getAll();
+
+  r.onsuccess=()=>{
+    products = r.result || [];
+    updateDashboard();
+  };
+}
+
+/* =========================
+   DASHBOARD CALC
+========================= */
+function updateDashboard(){
+
+  let totalQty = 0;
+  let totalBuy = 0;
+  let totalSell = 0;
+
+  products.forEach(p=>{
+    const qty = Number(p.qty)||0;
+    const buy = Number(p.buy)||0;
+    const sell = Number(p.sell)||0;
+
+    totalQty += qty;
+    totalBuy += buy * qty;
+    totalSell += sell * qty;
+  });
+
+  document.getElementById("totalProducts").innerText = products.length;
+  document.getElementById("totalQty").innerText = totalQty;
+  document.getElementById("totalBuy").innerText = totalBuy.toFixed(2)+" DA";
+  document.getElementById("totalSell").innerText = totalSell.toFixed(2)+" DA";
 }
 
 /* =========================
@@ -31,17 +73,7 @@ function save(p){
 }
 
 /* =========================
-   GET PRODUCT (DB DIRECT)
-========================= */
-function getProduct(key, cb){
-  const tx = db.transaction("products","readonly");
-  const req = tx.objectStore("products").get(key);
-
-  req.onsuccess = ()=> cb(req.result);
-}
-
-/* =========================
-   SEARCH (FIXED)
+   SEARCH
 ========================= */
 function search(){
   const val = norm(document.getElementById("searchInput").value);
@@ -49,37 +81,35 @@ function search(){
   const tx = db.transaction("products","readonly");
   const store = tx.objectStore("products");
 
-  const req = store.getAll();
+  const r = store.getAll();
 
-  req.onsuccess = ()=>{
-    const res = req.result;
-
-    const found = res.find(p =>
-      norm(p.barcode) === val ||
+  r.onsuccess=()=>{
+    const found = r.result.find(p =>
+      norm(p.barcode)===val ||
       norm(p.name).includes(val)
     );
 
     if(found){
       openEdit(found);
-    } else {
+    }else{
       alert("Produit introuvable");
     }
   };
 }
 
 /* =========================
-   DISPLAY EDIT
+   EDIT
 ========================= */
 function openEdit(p){
   currentProduct = p;
 
   document.getElementById("editModal").classList.remove("hidden");
 
-  document.getElementById("eName").value = p.name;
-  document.getElementById("eBarcode").value = p.barcode;
-  document.getElementById("eBuy").value = p.buy || 0;
-  document.getElementById("eSell").value = p.sell || 0;
-  document.getElementById("eQty").value = p.qty || 0;
+  eName.value = p.name;
+  eBarcode.value = p.barcode;
+  eBuy.value = p.buy;
+  eSell.value = p.sell;
+  eQty.value = p.qty;
 }
 
 function closeEdit(){
@@ -91,19 +121,20 @@ function closeEdit(){
 ========================= */
 function saveEdit(){
   const p = {
-    name: document.getElementById("eName").value,
-    barcode: document.getElementById("eBarcode").value,
-    buy: Number(document.getElementById("eBuy").value),
-    sell: Number(document.getElementById("eSell").value),
-    qty: Number(document.getElementById("eQty").value)
+    name:eName.value,
+    barcode:eBarcode.value,
+    buy:Number(eBuy.value),
+    sell:Number(eSell.value),
+    qty:Number(eQty.value)
   };
 
   save(p);
   closeEdit();
+  loadProducts();
 }
 
 /* =========================
-   SCANNER (IMPROVED)
+   SCANNER
 ========================= */
 function startScan(){
   document.getElementById("scanner").classList.remove("hidden");
@@ -119,43 +150,37 @@ function startScan(){
       }
     },
     decoder:{
-      readers:[
-        "ean_reader",
-        "ean_8_reader",
-        "code_128_reader"
-      ]
+      readers:["ean_reader","ean_8_reader","code_128_reader"]
     },
     locate:true
-  }, err=>{
-    if(err) console.log(err);
+  },err=>{
+    if(err) return console.log(err);
     Quagga.start();
   });
 
   Quagga.offDetected();
+
   Quagga.onDetected(data=>{
     const code = norm(data.codeResult.code);
 
     Quagga.stop();
-    document.getElementById("scanner").classList.add("hidden");
+    scanner.classList.add("hidden");
 
-    getProduct(code, p=>{
-      if(p){
-        openEdit(p);
-      }else{
-        alert("Produit introuvable");
-      }
-    });
+    const found = products.find(p=>norm(p.barcode)===code);
+
+    if(found) openEdit(found);
+    else alert("Produit introuvable");
   });
 }
 
 /* =========================
    IMPORT EXCEL
 ========================= */
-document.getElementById("excel").addEventListener("change", e=>{
+excel.addEventListener("change",e=>{
   const file = e.target.files[0];
   const reader = new FileReader();
 
-  reader.onload = evt=>{
+  reader.onload=evt=>{
     const data = new Uint8Array(evt.target.result);
     const wb = XLSX.read(data,{type:"array"});
     const sheet = wb.Sheets[wb.SheetNames[0]];
@@ -171,8 +196,20 @@ document.getElementById("excel").addEventListener("change", e=>{
       });
     });
 
-    alert("Import terminé");
+    loadProducts();
   };
 
   reader.readAsArrayBuffer(file);
 });
+
+/* =========================
+   EXPORT EXCEL
+========================= */
+function exportExcel(){
+  const ws = XLSX.utils.json_to_sheet(products);
+  const wb = XLSX.utils.book_new();
+
+  XLSX.utils.book_append_sheet(wb,ws,"Stock");
+
+  XLSX.writeFile(wb,"stock.xlsx");
+}
