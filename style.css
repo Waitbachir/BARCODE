@@ -6,12 +6,28 @@ body{
 }
 
 header{
+  text-align:center;
   padding:15px;
   background:#111827;
+}
+
+/* DASHBOARD */
+.dashboard{
+  display:grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap:10px;
+  padding:10px;
+}
+
+.box{
+  background:#1f2937;
+  padding:15px;
+  border-radius:10px;
   text-align:center;
 }
 
-.top{
+/* ACTIONS */
+.actions{
   display:flex;
   flex-direction:column;
   gap:10px;
@@ -20,8 +36,8 @@ header{
 
 input,button{
   padding:10px;
-  border-radius:8px;
   border:none;
+  border-radius:8px;
 }
 
 button{
@@ -29,6 +45,14 @@ button{
   color:white;
 }
 
+/* SEARCH */
+.search{
+  display:flex;
+  gap:10px;
+  padding:10px;
+}
+
+/* SCANNER */
 .scanner{
   position:fixed;
   top:0;
@@ -41,13 +65,7 @@ button{
 
 .hidden{display:none;}
 
-.card{
-  background:#1f2937;
-  margin:10px;
-  padding:10px;
-  border-radius:8px;
-}
-
+/* EDIT */
 .modal{
   position:fixed;
   top:0;
@@ -57,11 +75,10 @@ button{
   background:rgba(0,0,0,0.8);
 }
 
-.box{
+.modal .box{
   background:white;
   color:black;
   margin:50px auto;
-  padding:20px;
   width:90%;
   max-width:400px;
   display:flex;
